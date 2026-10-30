@@ -865,15 +865,18 @@ function vJugadores(){
 
 /* ---------- vista: análisis ---------- */
 function rangeFrom(){const r=UI.an.range;return r==='season'?seasonStart():addDays(today(),-(r-1))}
+function secSeg(){return `<div class="seg">${[['cont','Contenidos'],['asis','Asistencia'],['min','Minutos']].map(([k,n])=>`<button data-act="anSec" data-v="${k}" aria-pressed="${(UI.an.sec||'cont')===k}">${n}</button>`).join('')}</div>`}
 function vAnalisis(){
   const team=UI.team,from=rangeFrom(),to=UI.an.plan?addDays(today(),60):today();
   const pid=UI.an.player&&S.players[UI.an.player]?UI.an.player:'';
   const R=analyze({team,from,to,pid});const filWith=playersOf('B').filter(p=>sessionsOf('A').some(s=>s.date>=from&&s.date<=to&&(s.players||[]).includes(p.id))||Object.values(S.attend).some(a=>a.date>=from&&a.date<=to&&a.p?.[p.id]));
-  const ctrl=`<div class="wk-hd"><h2>Análisis</h2><span class="spacer"></span>
+  const ctrl=`<div class="wk-hd"><h2>Análisis</h2>${secSeg()}<span class="spacer"></span>
     <div class="seg">${[[28,'4 sem'],[56,'8 sem'],['season','Temporada']].map(([k,n])=>`<button data-act="anR" data-v="${k}" aria-pressed="${UI.an.range==k}">${n}</button>`).join('')}</div>
     <select class="inp" id="anPlayer" data-bind="anPlayer" aria-label="Jugador"><option value="">Todo el equipo</option>${playersOf('A').map(p=>`<option value="${p.id}" ${pid===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}${filWith.length?`<optgroup label="Filial">${filWith.map(p=>`<option value="${p.id}" ${pid===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</optgroup>`:''}</select>
     <button class="chip ${UI.an.plan?'on':''}" data-act="anPlan">Incluir planificado</button><button class="btn" data-act="pdfAn">${IC.pdf}PDF</button></div>`;
-  if(!R.ses&&!hasAny(from,to,pid))return ctrl+`<div class="card empty">Aún no hay sesiones en este periodo. Cuando diseñes y registres sesiones, aquí verás el reparto por contenidos, por día de partido y por jugador.</div>`;
+  const sec=UI.an.sec||'cont';const t2=to>today()?today():to;
+  const has=sec==='cont'?R.ses>0||Object.values(indStats('A',from,to,pid).c).some(Boolean):sec==='asis'?attTot(attStats('A',from,t2,pid).c)>0:Object.keys(minStats(from,t2,pid).P).length>0;
+  if(!has)return ctrl+`<div class="card empty">${sec==='cont'?'Aún no hay sesiones de fuerza en este periodo.':sec==='asis'?'Aún no hay asistencia registrada en este periodo. Se marca en la pestaña Asistencia o en Hoy.':'Aún no hay minutos registrados en este periodo. Se meten en la pestaña Minutos.'}</div>`;
   return ctrl+analysisBody(R,{team,pid,from,to});
 }
 function hbars(obj,{order,color,div=1,labels}={}){
@@ -935,19 +938,42 @@ function analysisBody(R,{team,pid,from,to},asSections=false){
   }else{
     const T=today();
     const rows=[...playersOf('A'),...playersOf('B')].filter(p=>R.players[p.id]);
-    extra=`<div class="panel wide"><h3>Jugadores</h3><div class="scroll-x"><table class="ptab"><thead><tr><th>Jugador</th><th>Min.</th><th>Ses.</th><th>Cumpl.</th><th>Asist.</th>${FAM.map(f=>`<th><span class="ftag f-${f.k}">${f.sh}</span></th>`).join('')}<th>Carga</th></tr></thead><tbody>
+    extra=`<div class="panel wide"><h3>Jugadores</h3><div class="scroll-x"><table class="ptab"><thead><tr><th>Jugador</th><th>Ses.</th><th>Cumpl.</th>${FAM.map(f=>`<th><span class="ftag f-${f.k}">${f.sh}</span></th>`).join('')}<th>Carga</th></tr></thead><tbody>
      ${rows.map(p=>{const Y=R.players[p.id];const c=Y.doneN?Math.round(Y.done/Y.doneN*100)+'%':'–';
-       return `<tr class="click" data-act="openPlayer" data-id="${p.id}"><td><span class="row" style="gap:8px;flex-wrap:nowrap">${avatar(p,26)}<b>${esc(p.name)}</b>${filTag(p)}${p.status&&p.status!=='ok'?`<span class="sdot ${p.status}" title="${STATUS[p.status]}"></span>`:''}</span></td><td>${MS[p.id]?MS[p.id].min+'′':'–'}</td><td>${Y.ses}</td><td>${c}</td><td>${(()=>{const a=AS.players[p.id];const v=a?attPct(a):null;return v==null?'–':`<b style="color:${pctColor(v)}">${v}%</b>`})()}</td>
+       return `<tr class="click" data-act="openPlayer" data-id="${p.id}"><td><span class="row" style="gap:8px;flex-wrap:nowrap">${avatar(p,26)}<b>${esc(p.name)}</b>${filTag(p)}${p.status&&p.status!=='ok'?`<span class="sdot ${p.status}" title="${STATUS[p.status]}"></span>`:''}</span></td><td>${Y.ses}</td><td>${c}</td>
        ${FAM.map(f=>{const l=Y.last[f.k];const d=l?diffDays(T,l):null;return `<td><span class="dd ${Y.fam[f.k]?sinceCls(d):''}" title="${d==null?'Sin registro':'Hace '+d+' días'}">${Y.fam[f.k]?r1(Y.fam[f.k]):'–'}</span></td>`}).join('')}<td>${Y.load?Math.round(Y.load):'–'}</td></tr>`}).join('')}</tbody></table></div>
-     <div class="legend"><span>Cumpl. = sesiones de fuerza hechas · Asist. = asistencia a entrenos · Punto de color: días desde el último estímulo</span><span style="--fc:var(--ok)">≤5 días</span><span style="--fc:var(--warn)">6–9 días</span><span style="--fc:var(--bad)">≥10 días desde el último estímulo</span></div></div>`;
+     <div class="legend"><span>Cumpl. = sesiones de fuerza hechas · Punto de color: días desde el último estímulo</span><span style="--fc:var(--ok)">≤5 días</span><span style="--fc:var(--warn)">6–9 días</span><span style="--fc:var(--bad)">≥10 días desde el último estímulo</span></div></div>`;
   }
   const minP=pid?(()=>{const X=MS[pid];if(!X)return `<div class="panel"><h3>Minutos</h3><small>Sin partidos registrados en el periodo.</small></div>`;const pct=X.pos?Math.round(X.min/X.pos*100):0;const lst=X.last.slice(-10);
     return `<div class="panel"><h3>Minutos · ${X.min}′</h3><div class="row" style="gap:14px"><span><b class="tn" style="font-family:var(--font-d);font-size:22px">${X.jug}</b> <small>jugados</small></span><span><b class="tn" style="font-family:var(--font-d);font-size:22px">${X.tit}</b> <small>titular</small></span><span><b class="tn" style="font-family:var(--font-d);font-size:22px">${X.nc}</b> <small>NC</small></span><span><b class="tn" style="font-family:var(--font-d);font-size:22px;color:var(--bad)">${X.les}</b> <small>lesión</small></span><span><b class="tn" style="font-family:var(--font-d);font-size:22px">${pct}%</b> <small>de los minutos posibles</small></span></div>
      <div class="cols" style="height:110px">${lst.map(({m,v,dur})=>{const mn=+v.min||0;return `<div class="col"><div class="bar" style="height:${v.st==='tit'||v.st==='sup'?Math.max(2,mn/dur*100):2}%;background:${v.st==='les'?'var(--bad)':v.st==='nc'?'var(--line)':v.st==='tit'?'var(--ok)':'var(--accent)'}"><em>${v.st==='nc'?'NC':v.st==='les'?'LES':mn}</em></div><span class="x">${fd(m.date)}</span></div>`}).join('')}</div></div>`})():'';
-  const order=pid?[avP,minP,indP,fam,mdP,extra,loadP,zoneP,cmP,coreP,musP,libP]:[avP,indP,fam,mdP,loadP,zoneP,cmP,coreP,musP,libP,extra];
-  if(asSections){const secs=[kp];let buf=[];const flush=()=>{if(buf.length)secs.push(`<div class="agrid">${buf.join('')}</div>`);buf=[]};
+  const sec=UI.an.sec||'cont';const t2=to>today()?today():to;const big=v=>`<b class="tn" style="font-family:var(--font-d);font-size:22px">${v}</b>`;
+  let order,kpx;
+  if(sec==='asis'){
+    kpx=`<div class="kpis"><div class="kpi"><div class="v" style="color:${pctColor(apct)}">${apct==null?'–':apct}<small>${apct==null?'':'%'}</small></div><div class="l">Asistencia</div></div><div class="kpi"><div class="v">${AS.days}</div><div class="l">Entrenos registrados</div></div><div class="kpi"><div class="v" style="color:var(--fis)">${AS.c.fis}</div><div class="l">Días de fisioterapia</div></div><div class="kpi"><div class="v" style="color:var(--bad)">${AS.c.no}</div><div class="l">Días no disponible</div></div></div>`;
+    let tbl;
+    if(pid){const ds=Object.values(S.attend).filter(a=>a.date>=from&&a.date<=t2&&a.p?.[pid]).sort((a,b)=>a.date<b.date?1:-1);
+      tbl=`<div class="panel wide"><h3>Día a día</h3>${ds.length?`<div class="scroll-x"><table class="ptab" style="min-width:0"><thead><tr><th>Fecha</th><th>MD</th><th>Estado</th></tr></thead><tbody>${ds.map(a=>{const st=a.p[pid];return `<tr><td>${dow(a.date)} ${fd(a.date)}</td><td>${mdFor(a.date,'A')||''}</td><td><span class="dd" style="justify-content:flex-end"><span class="sdot" style="background:var(--${AVc[st]})"></span>&nbsp;${ATT[st]?.n||st}</span></td></tr>`}).join('')}</tbody></table></div>`:'<small>Sin asistencia registrada.</small>'}</div>`}
+    else{const rows=[...playersOf('A'),...playersOf('B')].filter(p=>AS.players[p.id]).map(p=>({p,c:AS.players[p.id],v:attPct(AS.players[p.id])})).sort((a,b)=>(a.v??0)-(b.v??0));
+      tbl=`<div class="panel wide"><h3>Por jugador</h3>${rows.length?`<div class="scroll-x"><table class="ptab" style="min-width:600px"><thead><tr><th>Jugador</th>${ATTK.map(k=>`<th><span class="ftag a-${k}">${ATT[k].n}</span></th>`).join('')}<th>Asistencia</th></tr></thead><tbody>${rows.map(({p,c,v})=>`<tr class="click" data-act="openPlayer" data-id="${p.id}"><td><span class="row" style="gap:8px;flex-wrap:nowrap">${avatar(p,26)}<b>${esc(p.name)}</b>${filTag(p)}${p.status&&p.status!=='ok'?`<span class="sdot ${p.status}"></span>`:''}</span></td>${ATTK.map(k=>`<td>${c[k]||'–'}</td>`).join('')}<td><b style="color:${pctColor(v)}">${v}%</b></td></tr>`).join('')}</tbody></table></div><div class="legend"><span>Asistencia = (Disponible + ½ Parcial) / entrenos registrados · ordenado de menor a mayor</span></div>`:'<small>Sin asistencia registrada.</small>'}</div>`}
+    order=[avP.replace('<div class="panel">','<div class="panel wide">'),tbl];
+  }else if(sec==='min'){
+    const ms=matchesOf('A').filter(m=>m.date>=from&&m.date<=t2&&Object.keys(minOf(m.id)).length);
+    if(pid){const Y=MS[pid]||{min:0,jug:0,tit:0,sup:0,nc:0,les:0,conv:0,pos:0,last:[]};const pct=Y.pos?Math.round(Y.min/Y.pos*100):0;
+      kpx=`<div class="kpis"><div class="kpi"><div class="v">${Y.min}<small>′</small></div><div class="l">Minutos</div></div><div class="kpi"><div class="v">${Y.jug}</div><div class="l">Partidos jugados</div></div><div class="kpi"><div class="v">${Y.tit}</div><div class="l">Titular</div></div><div class="kpi"><div class="v">${Y.nc}</div><div class="l">No convocado</div></div><div class="kpi"><div class="v" style="color:var(--bad)">${Y.les}</div><div class="l">NC por lesión</div></div><div class="kpi"><div class="v">${pct}<small>%</small></div><div class="l">De los minutos posibles</div></div></div>`;
+      const tbl=`<div class="panel wide"><h3>Partido a partido</h3>${Y.last.length?`<div class="scroll-x"><table class="ptab" style="min-width:0"><thead><tr><th>Partido</th><th>Estado</th><th>Minutos</th></tr></thead><tbody>${Y.last.slice().reverse().map(({m,v})=>`<tr class="click" data-act="minOpen" data-m="${m.id}" data-p="${pid}"><td>${dow(m.date)} ${fd(m.date)} · ${esc(vsTxt(m))}</td><td>${MST[v.st]?.n||''}</td><td><b>${v.st==='tit'||v.st==='sup'?(+v.min||0)+'′':'–'}</b></td></tr>`).join('')}</tbody></table></div>`:'<small>Sin partidos registrados.</small>'}</div>`;
+      order=[minP.replace('<div class="panel">','<div class="panel wide">'),tbl];
+    }else{const rows=[...playersOf('A'),...playersOf('B')].filter(p=>MS[p.id]).map(p=>({p,X:MS[p.id]})).sort((a,b)=>b.X.min-a.X.min);const mx=Math.max(1,...rows.map(r=>r.X.min));const tot=rows.reduce((a,r)=>a+r.X.min,0);
+      kpx=`<div class="kpis"><div class="kpi"><div class="v">${ms.length}</div><div class="l">Partidos registrados</div></div><div class="kpi"><div class="v">${rows.filter(r=>r.X.jug).length}</div><div class="l">Jugadores utilizados</div></div><div class="kpi"><div class="v">${rows.filter(r=>r.X.tit).length}</div><div class="l">Han sido titulares</div></div><div class="kpi"><div class="v" style="color:var(--bad)">${rows.reduce((a,r)=>a+r.X.les,0)}</div><div class="l">NC por lesión</div></div></div>`;
+      const tbl=`<div class="panel wide"><h3>Minutos por jugador</h3>${rows.length?`<div class="scroll-x"><table class="ptab" style="min-width:720px"><thead><tr><th>Jugador</th><th>Minutos</th><th></th><th>PJ</th><th>Tit.</th><th>Conv.</th><th>NC</th><th>LES</th><th>% posibles</th></tr></thead><tbody>${rows.map(({p,X})=>`<tr class="click" data-act="openPlayer" data-id="${p.id}"><td><span class="row" style="gap:8px;flex-wrap:nowrap">${avatar(p,26)}<b>${esc(p.name)}</b>${filTag(p)}</span></td><td><b>${X.min}′</b></td><td style="width:22%"><span class="trk" style="display:block;height:10px;border-radius:4px;background:var(--surface-2);overflow:hidden"><i style="display:block;height:100%;width:${X.min/mx*100}%;background:var(--accent)"></i></span></td><td>${X.jug}</td><td>${X.tit}</td><td>${X.conv}</td><td>${X.nc||'–'}</td><td>${X.les?`<b style="color:var(--bad)">${X.les}</b>`:'–'}</td><td>${X.pos?Math.round(X.min/X.pos*100)+'%':'–'}</td></tr>`).join('')}</tbody></table></div><div class="legend"><span>PJ = partidos con minutos · Conv. = convocado · % posibles = minutos / minutos de los partidos en que fue convocado</span></div>`:'<small>Registra los minutos en el apartado Minutos para ver estos datos.</small>'}</div>`;
+      order=[tbl];}
+  }else{
+    kpx=kp;order=pid?[fam,mdP,extra,indP,loadP,zoneP,cmP,coreP,musP,libP]:[fam,mdP,indP,loadP,zoneP,cmP,coreP,musP,libP,extra];
+  }
+  const kp2=kpx;
+  if(asSections){const secs=[kp2];let buf=[];const flush=()=>{if(buf.length)secs.push(`<div class="agrid">${buf.join('')}</div>`);buf=[]};
     for(const h of order){if(h.startsWith('<div class="panel wide')){flush();secs.push(`<div class="agrid">${h}</div>`)}else{buf.push(h);if(buf.length===2)flush()}}flush();return secs}
-  return `<div class="stack">${kp}<div class="agrid">${order.join('')}</div></div>`;
+  return `<div class="stack">${kp2}<div class="agrid">${order.join('')}</div></div>`;
 }
 
 /* ---------- vista: partidos ---------- */
@@ -1088,7 +1114,7 @@ function drawPlayer(){
     body=`<div class="row"><span class="spacer"></span><button class="btn pri sm" data-act="newInd">${IC.plus}Sesión individual</button></div>`+body;
   }else{
     const from=rangeFrom();const R=analyze({team:'A',from,to:UI.an.plan?addDays(T,60):T,pid:SH.id});
-    body=`<div class="row"><div class="seg">${[[28,'4 sem'],[56,'8 sem'],['season','Temporada']].map(([k,n])=>`<button data-act="anR" data-v="${k}" aria-pressed="${UI.an.range==k}">${n}</button>`).join('')}</div><span class="spacer"></span><button class="btn pri sm" data-act="newInd">${IC.plus}Sesión individual</button></div>`
+    body=`<div class="row">${secSeg()}<div class="seg">${[[28,'4 sem'],[56,'8 sem'],['season','Temporada']].map(([k,n])=>`<button data-act="anR" data-v="${k}" aria-pressed="${UI.an.range==k}">${n}</button>`).join('')}</div><span class="spacer"></span><button class="btn pri sm" data-act="newInd">${IC.plus}Sesión individual</button></div>`
       +(R.ses||hasAny(from,T,SH.id)?analysisBody(R,{team:'A',pid:SH.id,from,to:T}):`<div class="card empty">Sin sesiones en este periodo.</div>`);
   }
   const foot=SH.ptab==='ficha'?`<button class="btn pri" data-act="pSave">Guardar</button><span class="spacer"></span>${SH.isNew?'':`<button class="btn danger ${SH.arm?'arm':''}" data-act="pDel">${SH.arm?'Confirmar borrado':'Eliminar'}</button>`}`:'';
@@ -1240,9 +1266,9 @@ function pdfList(){
 function anSub(){return `${UI.an.range==='season'?'Temporada':UI.an.range===56?'Últimas 8 semanas':'Últimas 4 semanas'} · ${fd(rangeFrom())} – ${fd(today())}${UI.an.plan?' · incluye planificado':''}`}
 function pdfAnalysis(){
   const team=UI.team,from=rangeFrom(),to=UI.an.plan?addDays(today(),60):today();const pid=UI.an.player&&S.players[UI.an.player]?UI.an.player:'';
-  const R=analyze({team,from,to,pid});if(!R.ses){toast('No hay datos en este periodo');return}
+  const R=analyze({team,from,to,pid});if(!R.ses&&!hasAny(from,to,pid)){toast('No hay datos en este periodo');return}
   const who=pid?S.players[pid].name:TEAMS[team];
-  makePdf(`Analisis-${fnSafe(who)}-${today()}.pdf`,[pHead(`Análisis · ${who}`,anSub()),...analysisBody(R,{team,pid,from,to},true)],'p');
+  const secN={cont:'Contenidos',asis:'Asistencia',min:'Minutos'}[UI.an.sec||'cont'];makePdf(`Analisis-${secN}-${fnSafe(who)}-${today()}.pdf`,[pHead(`${secN} · ${who}`,anSub()),...analysisBody(R,{team,pid,from,to},true)],'p');
 }
 function pdfPlayer(){
   const pid=SH.id,p=S.players[pid];if(!p)return;const from=rangeFrom(),to=UI.an.plan?addDays(today(),60):today();
@@ -1250,7 +1276,7 @@ function pdfPlayer(){
   const head=pHead(p.name,`${esc([p.num!=null&&p.num!==''?'#'+p.num:'',p.pos||p.line,TEAMS[p.team],STATUS[p.status||'ok']+(p.status&&p.status!=='ok'&&p.note?' ('+p.note+')':'')].filter(Boolean).join(' · '))} · ${anSub()}`);
   const ss=sessionsOf('A').filter(s=>(s.players||[]).includes(pid)&&s.date>=from&&s.date<=to);
   const list=`<h3 style="margin:6px 0">Sesiones</h3><table class="ptbl"><thead><tr><th>Fecha</th><th>MD</th><th>Sesión</th><th>Contenidos</th><th>Hecha</th><th>RPE</th></tr></thead><tbody>${ss.map(s=>{const a=s.att?.[pid]||{};const bl=(s.blocks||[]).filter(b=>b.c&&(!b.who?.length||b.who.includes(pid)));return `<tr><td>${dow(s.date)} ${fd(s.date)}</td><td>${sesMd(s)||''}</td><td>${esc(sesName(s))}</td><td>${bl.map(b=>`<div class="bl f-${b.f}"><span>${esc(blockLine(b))}</span></div>`).join('')}</td><td>${a.st?SV[a.st]:'–'}</td><td>${a.rpe||'–'}</td></tr>`}).join('')||'<tr><td colspan="6" class="muted">Sin sesiones</td></tr>'}</tbody></table>`;
-  makePdf(`Jugador-${fnSafe(p.name)}-${today()}.pdf`,[head,...(R.ses||hasAny(from,to,pid)?analysisBody(R,{team:'A',pid,from,to},true):[]),list],'p');
+  makePdf(`Jugador-${fnSafe(p.name)}-${today()}.pdf`,[head,...(()=>{const keep=UI.an.sec;const out=[];for(const k of ['cont','asis','min']){UI.an.sec=k;out.push(`<h2 style="margin:6px 0">${{cont:'Contenidos',asis:'Asistencia',min:'Minutos'}[k]}</h2>`,...analysisBody(R,{team:'A',pid,from,to},true))}UI.an.sec=keep;return out})(),list],'p');
 }
 
 /* ---------- eventos ---------- */
@@ -1263,6 +1289,7 @@ const A={
  sesF:t=>{UI.ses.f=t.dataset.v;render()},
  plF:t=>{UI.pl.line=t.dataset.v;render()},
  anR:t=>{const v=t.dataset.v;UI.an.range=v==='season'?'season':+v;if(SH?.type==='pl')drawPlayer();else render()},
+ anSec:t=>{UI.an.sec=t.dataset.v;if(SH?.type==='pl')drawPlayer();else render()},
  anPlan:()=>{UI.an.plan=!UI.an.plan;render()},
  settings:()=>openSettings(),
  close:()=>closeSheet(),
