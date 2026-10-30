@@ -231,7 +231,7 @@ button.mcell:hover{background:var(--surface-2)}
 .m4 button{min-width:44px;height:36px;padding:0 6px;border-radius:8px;border:1px solid var(--line);background:var(--surface);font-family:var(--font-d);font-weight:700;font-size:14px;color:var(--muted)}
 .m4 button.on{color:#fff;border-color:var(--mc);background:var(--mc)}
 .mmin{grid-column:1/-1;display:flex;gap:4px;align-items:center;flex-wrap:wrap}
-.mmin .inp{width:66px;text-align:center;height:34px;font-weight:700}
+.mmin .inp{width:76px;font-size:16px;text-align:center;height:34px;font-weight:700}
 .mmin .q{height:30px;min-width:38px;border-radius:7px;background:var(--surface-2);font-weight:700;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
 @media(min-width:700px){.mrow{grid-template-columns:minmax(0,1fr) auto minmax(250px,auto)}.mmin{grid-column:auto;justify-content:flex-end}}
 .add-day{display:flex;align-items:center;justify-content:center;gap:4px;height:34px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);font-weight:600;font-size:13px}
@@ -763,16 +763,15 @@ function drawMinMatch(){
   const filIds=Object.keys(mp).filter(id=>isFil(S.players[id]));const showFil=SH.fil||filIds.length;
   const ps=[...playersOf('A'),...(showFil?playersOf('B').filter(p=>SH.fil||filIds.includes(p.id)):[])];
   const c={tit:0,sup:0,nc:0,les:0};ps.forEach(p=>{const v=mp[p.id];if(v?.st)c[v.st]++});
-  const quick=[dur,dur/2,60,70,80,15,0].filter((x,i,a)=>a.indexOf(x)===i);
   const rows=ps.map(p=>{const v=mp[p.id]||{};const playing=v.st==='tit'||v.st==='sup';
     return `<div class="mrow" data-p="${p.id}"><div class="reg-p">${avatar(p,32)}<div style="min-width:0"><b>${esc(p.name)} ${filTag(p)}</b><small>${esc(p.pos||p.line||'')}${p.status&&p.status!=='ok'?' · '+STATUS[p.status]:''}</small></div></div>
      <div class="m4">${Object.entries(MST).map(([k,o])=>`<button class="${v.st===k?'on':''}" style="--mc:${o.c}" data-act="minSt" data-p="${p.id}" data-v="${k}" title="${o.n}">${o.s}</button>`).join('')}</div>
-     <div class="mmin">${playing?`<input class="inp" id="mn-${p.id}" inputmode="numeric" placeholder="min" value="${v.min??''}" data-bind="minV" data-p="${p.id}">${quick.map(q=>`<button class="q" data-act="minQ" data-p="${p.id}" data-v="${q}">${q}′</button>`).join('')}`:''}</div></div>`}).join('');
+     <div class="mmin">${v.st==='nc'||v.st==='les'?'':`<input class="inp" id="mn-${p.id}" type="number" inputmode="numeric" min="0" max="130" placeholder="min" value="${v.min??''}" data-bind="minV" data-p="${p.id}"><small class="muted">min</small>`}</div></div>`}).join('');
   const body=`<div class="row"><span class="lbl">${dow(m.date)} ${fd(m.date)} · ${esc(m.comp||'')}</span><span class="spacer"></span><span class="lbl">Duración</span><div class="seg">${[90,120].map(d=>`<button data-act="minDur" data-v="${d}" aria-pressed="${dur===d}">${d}′</button>`).join('')}</div></div>
    <div class="row" style="gap:12px">${Object.entries(MST).map(([k,o])=>`<span class="row" style="gap:5px"><span class="sdot" style="background:${o.c}"></span><b class="tn">${c[k]}</b><small>${o.n}</small></span>`).join('')}</div>
    <div class="row"><button class="btn sm" data-act="minRest" data-v="nc">Resto NC</button><button class="btn sm" data-act="minRest" data-v="sup0">Resto suplente 0′</button><button class="btn sm ghost" data-act="minLes">Lesionados → LES</button><span class="spacer"></span><button class="chip sm ${showFil?'on':''}" data-act="minFil">${showFil?'−':'+'} Filial</button></div>
    <div class="card pad">${rows}</div>
-   <small class="muted">TIT pone ${dur}′ automáticamente; cámbialo si fue sustituido. SUP = convocado: pon sus minutos (0 si no jugó).</small>`;
+   <small class="muted">Escribe los minutos de cada jugador. Al escribir un número queda como convocado (SUP); marca TIT si fue titular. Sin minutos = 0′.</small>`;
   const keep=$('#shb')?.scrollTop;
   $('#sheet').innerHTML=sheetFrame(vsTxt(m),body,`<button class="btn pri" data-act="close">Listo</button><button class="btn" data-act="editMatch" data-id="${SH.mid}">${IC.flag}Partido</button>`);
   if(keep)$('#shb').scrollTop=keep;
@@ -1318,9 +1317,9 @@ const A={
  minMore:()=>{UI.minN=(UI.minN||8)+8;render()},
  minOpen:t=>openMinMatch(t.dataset.m,t.dataset.p),
  minMatch:t=>openMinMatch(t.dataset.m),
- minSt:t=>{const {p,v}=t.dataset;const dur=mDur(SH.mid);setMin(SH.mid,p,c=>{if(c.st===v){c.st=null;return}c.st=v;if(v==='tit'&&(c.min==null||c.min===''))c.min=dur;if(v==='sup'&&c.min===dur)c.min=null;if(v==='nc'||v==='les')delete c.min});drawMinMatch();render()},
+ minSt:t=>{const {p,v}=t.dataset;const dur=mDur(SH.mid);setMin(SH.mid,p,c=>{if(c.st===v){c.st=null;return}c.st=v;if(v==='nc'||v==='les')delete c.min});drawMinMatch();render();if(v==='tit'||v==='sup'){const i=document.getElementById('mn-'+p);if(i&&i.value==='')i.focus()}},
  minQ:t=>{const {p,v}=t.dataset;setMin(SH.mid,p,c=>{c.min=+v});drawMinMatch();render()},
- minDur:t=>{const doc=S.minutes[SH.mid]?clone(S.minutes[SH.mid]):{p:{}};const old=mDur(SH.mid),nw=+t.dataset.v;Object.values(doc.p||{}).forEach(x=>{if(x.st==='tit'&&+x.min===old)x.min=nw});doc.dur=nw;S.minutes[SH.mid]=doc;queueWrite('minutes',SH.mid);drawMinMatch();render()},
+ minDur:t=>{const doc=S.minutes[SH.mid]?clone(S.minutes[SH.mid]):{p:{}};const old=mDur(SH.mid),nw=+t.dataset.v;doc.dur=nw;S.minutes[SH.mid]=doc;queueWrite('minutes',SH.mid);drawMinMatch();render()},
  minRest:t=>{const m=S.matches[SH.mid];const v=t.dataset.v;playersOf('A').forEach(p=>{if(minOf(SH.mid)[p.id]?.st)return;setMin(SH.mid,p.id,c=>{if(v==='nc')c.st=p.status==='les'?'les':'nc';else{c.st=p.status==='les'?'les':'sup';if(c.st==='sup')c.min=0}})});drawMinMatch();render()},
  minLes:()=>{playersOf('A').filter(p=>p.status==='les').forEach(p=>setMin(SH.mid,p.id,c=>{c.st='les';delete c.min}));drawMinMatch();render()},
  minFil:()=>{SH.fil=!SH.fil;drawMinMatch()},
@@ -1366,14 +1365,14 @@ const B={
  bMs:(v,t)=>{SH.d.blocks[+t.dataset.i].ms=v===''?null:+String(v).replace(',','.');autosave()},
  pName:v=>SH.d.name=v, pNum:v=>SH.d.num=v, pNote:v=>SH.d.note=v, pSince:v=>SH.d.since=v||null,
  mDate:v=>SH.d.date=v||SH.d.date, mRival:v=>SH.d.rival=v,
- minV:(v,t)=>{const n=v===''?null:Math.max(0,Math.min(130,parseInt(v,10)||0));setMin(SH.mid,t.dataset.p,c=>{c.min=n})},
+ minV:(v,t)=>{const pid=t.dataset.p;const n=v===''?null:Math.max(0,Math.min(130,parseInt(v,10)||0));let added=false;setMin(SH.mid,pid,c=>{c.min=n;if(n!=null&&!c.st){c.st='sup';added=true}});if(added){const b=document.querySelector(`[data-act=minSt][data-p="${pid}"][data-v=sup]`);if(b)b.classList.add('on')}},
  c1:v=>SH.a=v, c2:v=>SH.b=v,
  cNote:v=>{},
  anPlayer:v=>{UI.an.player=v;render()}
 };
 document.addEventListener('input',e=>{const t=e.target;const k=t.dataset?.bind;if(!k||!B[k])return;if(k==='sDate'||k==='anPlayer')return;B[k](t.value,t)});
 document.addEventListener('change',e=>{const t=e.target;if(t.id==='photoInput'){if(t.files?.[0])uploadPhoto(t.files[0]);return}if(t.id==='crestInput'){if(t.files?.[0])uploadCrest(t.files[0]);return}if(t.id==='importInput'){if(t.files?.[0])importData(t.files[0]);return}if(t.dataset?.bind==='cNote'&&SH?.type==='cell'){const {pid,d}=SH;setInd(S.players[pid].team,d,pid,c=>c.note=t.value.trim());render();return}if(t.dataset?.bind==='qNote'){const p=clone(S.players[t.dataset.id]);if(p&&p.note!==t.value){p.note=t.value;put('players',t.dataset.id,p).then(()=>toast('Nota guardada'))}return}const k=t.dataset?.bind;if(k==='sDate'||k==='anPlayer')B[k](t.value,t)});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&SH)closeSheet()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&SH)closeSheet();if(e.key==='Enter'&&e.target?.dataset?.bind==='minV'){e.preventDefault();const all=[...document.querySelectorAll('[data-bind=minV]')];const i=all.indexOf(e.target);if(all[i+1])all[i+1].focus();else e.target.blur()}});
 
 /* ---------- arranque ---------- */
 function subscribe(){
