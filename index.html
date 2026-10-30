@@ -554,7 +554,7 @@ function analyze({team,from,to,pid}){
   return R;
 }
 function sinceCls(d){if(d==null)return 'bad';return d<=5?'ok':d<=9?'warn':'bad'}
-function acwr(X){const T=today();let a=0,c=0;for(const[d,L]of Object.entries(X.days||{})){const k=diffDays(T,d);if(k>=0&&k<7)a+=L;if(k>=0&&k<28)c+=L}c=c/4;return c>0?a/c:null}
+function acwr(X){const T=today();const ds=Object.keys(X.days||{}).sort();if(!ds.length||diffDays(T,ds[0])<21)return null;let a=0,c=0;for(const[d,L]of Object.entries(X.days||{})){const k=diffDays(T,d);if(k>=0&&k<7)a+=L;if(k>=0&&k<28)c+=L}c=c/4;return c>0?a/c:null}
 
 /* ---------- PIN ---------- */
 let pinBuf='',pinStage='enter',pinFirst='',pinErr=false,rememberDev=true;
@@ -890,13 +890,14 @@ function indStats(team,from,to,pid){const c={};Object.keys(ITAGS).forEach(k=>c[k
   for(const doc of Object.values(S.indiv)){if(doc.team!==team||doc.date<from||doc.date>to)continue;for(const [p,v] of Object.entries(doc.p||{})){if(!S.players[p]||(pid&&p!==pid))continue;(v.t||[]).forEach(t=>{if(c[t]==null)return;c[t]++;if(doc.date<=today()&&(!last[t]||last[t]<doc.date))last[t]=doc.date;const X=players[p]||(players[p]={});X[t]=(X[t]||0)+1})}}
   return {c,last,players}}
 function analysisBody(R,{team,pid,from,to},asSections=false){
+  const MS=minStats(from,to>today()?today():to,pid).P;
   const div=pid?1:R.nP;const per=pid?'':' · media por jugador';
   const compl=R.compl[1]?Math.round(R.compl[0]/R.compl[1]*100):null;
   // carga semanal
   const weeks=[];let w=monday(from);const end=monday(to>today()?today():to);while(w<=end){weeks.push(w);w=addDays(w,7)}
   const wk=weeks.slice(-12).map(w=>{if(pid){return [w,R.players[pid]?.weeks[w]||0]}const x=R.weeks[w];return [w,x?x.sum/x.ps.size:0]});
   const wmax=Math.max(1,...wk.map(x=>x[1]));
-  const avgLoad=wk.length?wk.reduce((a,b)=>a+b[1],0)/wk.length:0;
+  const wkL=wk.filter(x=>x[1]>0);const avgLoad=wkL.length?wkL.reduce((a,b)=>a+b[1],0)/wkL.length:0;
   const X=pid?R.players[pid]:null;const ac=X?acwr(X):null;
   const mds=MD_ORDER.filter(m=>R.mds.has(m));if(R.mds.has('—'))mds.push('—');
   const kp=`<div class="kpis">
@@ -904,7 +905,7 @@ function analysisBody(R,{team,pid,from,to},asSections=false){
    <div class="kpi"><div class="v" style="color:${pctColor(compl)}">${compl==null?'–':compl}<small>${compl==null?'':'%'}</small></div><div class="l">Cumplimiento fuerza</div></div>
    <div class="kpi"><div class="v">${r1(R.sets/div)}</div><div class="l">Series${per}</div></div>
    <div class="kpi"><div class="v">${Math.round(avgLoad)}</div><div class="l">sRPE semanal medio (UA)</div></div>
-   ${pid?`<div class="kpi"><div class="v" style="color:${ac==null?'inherit':ac<.8||ac>1.5?'var(--bad)':ac>1.3?'var(--warn)':'var(--ok)'}">${ac==null?'–':ac.toFixed(2)}</div><div class="l">Ratio agudo:crónico</div></div>`
+   ${pid?`<div class="kpi"><div class="v" style="color:${ac==null?'inherit':ac<.8||ac>1.5?'var(--bad)':ac>1.3?'var(--warn)':'var(--ok)'}">${ac==null?'–':ac.toFixed(2)}</div><div class="l">Ratio agudo:crónico${ac==null?' · mín. 3 semanas':''}</div></div>`
        :`<div class="kpi"><div class="v" style="color:${R.pending?'var(--warn)':'inherit'}">${R.pending}</div><div class="l">Sesiones sin registrar</div></div>`}
   </div>`;
   const AS=attStats(team,from,to>today()?today():to,pid);const avT=attTot(AS.c);const apct=attPct(AS.c);
@@ -940,7 +941,6 @@ function analysisBody(R,{team,pid,from,to},asSections=false){
        ${FAM.map(f=>{const l=Y.last[f.k];const d=l?diffDays(T,l):null;return `<td><span class="dd ${Y.fam[f.k]?sinceCls(d):''}" title="${d==null?'Sin registro':'Hace '+d+' días'}">${Y.fam[f.k]?r1(Y.fam[f.k]):'–'}</span></td>`}).join('')}<td>${Y.load?Math.round(Y.load):'–'}</td></tr>`}).join('')}</tbody></table></div>
      <div class="legend"><span>Cumpl. = sesiones de fuerza hechas · Asist. = asistencia a entrenos · Punto de color: días desde el último estímulo</span><span style="--fc:var(--ok)">≤5 días</span><span style="--fc:var(--warn)">6–9 días</span><span style="--fc:var(--bad)">≥10 días desde el último estímulo</span></div></div>`;
   }
-  const MS=minStats(from,to>today()?today():to,pid).P;
   const minP=pid?(()=>{const X=MS[pid];if(!X)return `<div class="panel"><h3>Minutos</h3><small>Sin partidos registrados en el periodo.</small></div>`;const pct=X.pos?Math.round(X.min/X.pos*100):0;const lst=X.last.slice(-10);
     return `<div class="panel"><h3>Minutos · ${X.min}′</h3><div class="row" style="gap:14px"><span><b class="tn" style="font-family:var(--font-d);font-size:22px">${X.jug}</b> <small>jugados</small></span><span><b class="tn" style="font-family:var(--font-d);font-size:22px">${X.tit}</b> <small>titular</small></span><span><b class="tn" style="font-family:var(--font-d);font-size:22px">${X.nc}</b> <small>NC</small></span><span><b class="tn" style="font-family:var(--font-d);font-size:22px;color:var(--bad)">${X.les}</b> <small>lesión</small></span><span><b class="tn" style="font-family:var(--font-d);font-size:22px">${pct}%</b> <small>de los minutos posibles</small></span></div>
      <div class="cols" style="height:110px">${lst.map(({m,v,dur})=>{const mn=+v.min||0;return `<div class="col"><div class="bar" style="height:${v.st==='tit'||v.st==='sup'?Math.max(2,mn/dur*100):2}%;background:${v.st==='les'?'var(--bad)':v.st==='nc'?'var(--line)':v.st==='tit'?'var(--ok)':'var(--accent)'}"><em>${v.st==='nc'?'NC':v.st==='les'?'LES':mn}</em></div><span class="x">${fd(m.date)}</span></div>`}).join('')}</div></div>`})():'';
